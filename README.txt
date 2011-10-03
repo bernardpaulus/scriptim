@@ -4,6 +4,9 @@ Scriptim -- scriptor improved
 
 is a python clone of scriptor, a console to interact with smartcard readers.
 
+latest version and additionnal info can be found at:
+http://github.com/bernardpaulus/scriptim
+
 #    Copyright 2011 Bernard Paulus <bprecyclebin@gmail.com>
 #    
 #    This file is part of scriptim
@@ -43,9 +46,25 @@ Scriptim additionnally targets to:
 to run scriptim, you'll need:
 python (works at least under 2.6 and 2.7), pcsc_lite, pyscard and ccid
 
-You can obtain them on debian by typing this:
+*** Mac OS/X snow leopard ***
+
+ - go to the touchatag website, create an account there, download & extract the
+   archive for mac
+    http://www.touchatag.com/downloads
+
+ - you'll have driver.dmg, install and restart computer
+ - install touchatag.dmg, also present. Launch app, and wait for it's connection
+   to the server.
+ - install pyscard from http://sourceforge.net/projects/pyscard/
+ - download scriptim https://github.com/bernardpaulus/scriptim
+
+*** debian ***
+
+You can obtain the required programs on debian by typing this:
 sudo aptitude install pcsc-tools python-pyscard libccid
 
+the latest version of scriptim can be found at
+https://github.com/bernardpaulus/scriptim
 
 === RUNNING ===
 
