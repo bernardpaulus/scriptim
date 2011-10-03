@@ -173,10 +173,9 @@ that reader, or ask the user for one if given reader is not present."""
                 print "Using only present reader "+str(curreader)
             else:
                 curreader=selector(readers, 0)[1]
-                self.s=smartcard.Session(curreader)
 
         readers=[str(x) for x in smartcard.System.readers()]
-        if (curreader is not None) and curreader in readers:
+        if (curreader is not None) and str(curreader) in readers:
             self.s=smartcard.Session(curreader)
 
         self.curreader=curreader
