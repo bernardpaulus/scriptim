@@ -49,6 +49,11 @@ except ImportError:
     print "on debian, try: sudo aptitude install python-pyscard"
     sys.exit(3)
 
+#=== UTILS ===
+
+
+#+++ shell utils +++
+
 def command_loop(fun_usrinput=lambda x: x not in ["quit", "exit", None] and
                               str(x) or None):
     """
@@ -95,7 +100,11 @@ def selector(choices_list, default_index=None):
             print " "+str(i)+" \t", str(choices_list[i])
 
     try:
-        choice=int(raw_input("Your number: ") or str(default_index))
+        ustr=raw_input("Your number: ")
+    except EOFError:
+        ustr=None
+    try:
+        choice=int(ustr or str(default_index))
         # in the case of empty or invalid entry, the default is returned
     except ValueError:
         if 0 <= default_index < len(choices_list):
@@ -109,12 +118,214 @@ def selector(choices_list, default_index=None):
     else:
         return default_return
 
+#+++ scriptim exceptions +++
+
+class ScriptimException(Exception):
+    """Base class for every scriptim exception."""
+    pass
+
+class ReaderAbsentException(ScriptimException):
+    """raised when a reader that should be there isn't"""
+    pass
+
+#+++ pyscard wrapper functions +++
+
+def safe_list_readers(groups=[]):
+    """list readers, or exits nicely if pcsc daemon is not running"""
+    try:
+        return smartcard.System.readers(groups)
+    except EstablishContextException, e:
+        print str(e)
+        print "Unable to list readers. Unix: pcsc daemon should be running."
+        sys.exit(2)
+
+def reader_plugged(reader, raise_e=True):
+    """check whether reader is pysically connected or not
+If raise_e is False, it will return a boolean indicating it's presence
+If it's True, ReaderAbsentException will be raised
+
+Note: even though this doesn't give any guarantee about future reader presence,
+we will use this to protect commands
+"""
+#TODO : check which exceptions are thrown if card is disconnected and recover
+# from that, you moron!
+    if not isinstance(reader, smartcard.reader.Reader.Reader): 
+        plugged=False # compensate for BUG in pyscard
+# http://pyscard.sourceforge.net/epydoc/smartcard.reader.Reader-pysrc.html#Reader.__eq__
+    else:
+        plugged=reader in safe_list_readers() 
+    if raise_e and not plugged:
+        raise ReaderAbsentException("reader "+str(reader)+" is not present")
+    return plugged
+
+
+#+++ utils string parsing and output formating functions +++
+
+def error_location( ustr, index):
+    """returns the string appended with a newline and one indication of the
+    given index
+
+    the current implementation places an '^' right under the character at
+    the given index.
+    """
+    # TODO : deal with long lines.
+    index_repr="@"+str(index)+" "
+    if not index >= len(index_repr): # not enough space
+        index_repr=""
+    return ustr+"\n"+index_repr+''.join([' ' for num in xrange(index-(len(index_repr)))])+"^"
+
+def normal_hex_input(ustr):
+    """Parse a normal hexadecimal line of input
+
+    Normal lines are formed of blocs whose length is even, and shortcut blocs
+whose length is 1. Those shortcut blocs are equivalent to "0X", where X is
+the shortcut bloc. The accepted character set is the set of all hexadecimal
+characters.
+
+We return "" if the string doesn't contain any command, 
+or a string indicating a parsing error if there is one, 
+or the command, a list of bytes if given string is well-formed
+
+"""
+    base=16 # hexadecimal input
+    
+    command=[]
+    for bloc in ustr.split():
+
+        if len(bloc) % 2 == 1 and len(bloc) != 1: # don't accept blocs of 3, 5, ... 
+                # since user might forget a symbol if he doesn't split his
+                # command, but accept shortcuts for the high-order 0
+            s="length of "+bloc+" is not even or equal to 1\n\n"
+            m=re.search(escape_backslashes(bloc), ustr)
+            s+=error_location(ustr, m.start())
+            return s
+
+        byte=0
+        for i in xrange(len(bloc)):
+            try:
+                value=int(bloc[i],base)
+            except ValueError:
+                s="character "+bloc[i]+" is not an hexadecimal\n\n"
+                m=re.search(escape_backslashes(bloc), ustr)
+                s+=error_location(ustr, m.start()+i)
+                return s
+
+            if len(bloc)== 1: # allows shortcuts for the high-order 0
+                byte=value
+                command.append(byte) # byte complete
+            elif i % 2 ==0: # the first 4 bits of a byte of 2 symbols
+                byte=value*base
+            else:
+                byte+=value
+                command.append(byte) # byte complete
+    if len(command) == 0: # empty command
+        return ""
+    return command
+
+def autoconvert_data(data):
+    """automatically convert list of bytes data to ascii char on some
+conditions, return None if the default printing method should be applied
+
+The current condition is whether it contains enough printable characters, but it
+might be user-configured in the future
+
+"""
+    min_ascii=1.0 
+        # minimal proportion of printable ascii characters in the data to
+        # automatically enable translation
+    
+    len_few_errors=5
+        # length needed to ensure a low probability of converting to ascii
+        # non-ascii data
+        # len_few_errors == 5 => probably less than 1% of errors
+    ascii_chars=[chr(x) for x in data if 32 <= x <= 126 ]
+        # only printable ascii characters
+
+    if len(data) == 0: 
+        return None
+
+    if float(len(ascii_chars)) / len(data) >= min_ascii:
+        out=[]
+        for c in data:
+            if 32 <= c <= 126:
+                out.append(chr(c))
+            else: # display  unprintable as \xHH (not perfect but ok)
+                out.append('\\x'+pzero(hex(c)[2:]))
+
+        asciistr=''.join(out)
+        if len(asciistr) <= len_few_errors: 
+            # still probable that data is not ascii data => print both
+            asciistr+=" "+str([pzero(hex(x)[2:]) for x in ans])
+        return asciistr
+
+    else: # not enough evidence to print it in ascii
+        return None
+
+def normal_hex_output(ans, sw1, sw2):
+    """Format answer and the two status words nicely"""
+    data=autoconvert_data(ans)
+    if data is None:
+        data="["+(' '.join([pzero(hex(x)[2:]) for x in ans]))+"]"
+    else:
+        data="[ "+data+" ]"
+
+    return data+" "+pzero(hex(sw1)[2:])+" "+pzero(hex(sw2)[2:])
+
+def remove_comments(ustr, comment_pattern='#.*'):
+    """deletes any commented part of the string. Accepts None to tolerate
+EOFi
+Interesting patterns may be:
+- "#(.|\n)*" to suppress comment further than any newline present
+- "/\*(.|\n)*?\*/" to non greedily remove /*...*/ style comments spanned over
+  multiple lines
+
+"""
+    if ustr is None: # EOF
+        return None
+
+    m=re.search(comment_pattern, ustr)
+    if m:
+        return ustr[:m.start()]+ustr[m.end():]
+    else:
+        return ustr
+
+#+++ history utils +++
+# from python docs (readline)
+# need readline, atexit
+# os might be useful for ~ expansion os.path.expanduser
+
+def init_history(histfile):
+    readline.parse_and_bind("tab: complete")
+    if hasattr(readline, "read_history_file"):
+        try:
+            readline.read_history_file(histfile)
+        except IOError:
+            print "unable to read history file: "+histfile
+        atexit.register(save_history, histfile)
+
+def save_history(histfile):
+    try:
+        readline.write_history_file(histfile)
+    except IOError:
+        print "unable to save history in "+histfile
+
+
+#+++ misc utils +++
+
 def escape_backslashes(string):
-    """escapes every backslash present in the string"""
-    # you can use this to make a string become a re pattern for itself :)
+    """escapes every backslash present in the string
+you might want to use this to make a string become a re pattern for itself :)
+"""
     escape_if_backslash=lambda x: x == '\\' and "\\\\" or x
     return ''.join([escape_if_backslash(x) for x in string])
     
+def pzero(x): 
+    """ pushes "0" in front of string if it's length is 1"""
+    return len(x)==1 and "0"+x or x
+
+
+#=== USER INPUT TREATMENT AND EXECUTION
+
 class fun_loop_creator:
     """this class provides a function which will treat the user input in the
 loop: fun_usrinput
@@ -140,7 +351,7 @@ loop: fun_usrinput
         # readline history
         histfile=os.path.expanduser('~/.scriptim_history')
         try:
-            self.init_history(histfile)
+            init_history(histfile)
         except NameError:
             pass
 
@@ -157,25 +368,26 @@ Calling it with a reader creates a new connection with
 that reader, or ask the user for one if given reader is not present."""
 
         if self.s is not None: # already had a connection
+            reader_plugged(self.curreader, False)
             self.s.close()
             self.s=None
 
         # take given reader or previous reader
         curreader=reader or self.curreader 
 
-        readers=smartcard.System.readers()
+        readers=safe_list_readers()
         if len(readers) == 0:
             print "no readers present. Smartcard commands are not sent."
             curreader=self.READER_NULL
-        elif curreader is None or curreader not in smartcard.System.readers():
+        elif curreader is None or not reader_plugged(curreader, False)\
+                and not str(reader) ==self.READER_NULL: # BUG pyscard=> str()
             if len(readers) == 1:
                 curreader=readers[0]
                 print "Using only present reader "+str(curreader)
             else:
                 curreader=selector(readers, 0)[1]
 
-        readers=[str(x) for x in smartcard.System.readers()]
-        if (curreader is not None) and str(curreader) in readers:
+        if curreader is not None and reader_plugged(curreader, False):
             self.s=smartcard.Session(curreader)
 
         self.curreader=curreader
@@ -185,142 +397,18 @@ that reader, or ask the user for one if given reader is not present."""
         """Propose to the user to select a reader or no reader, close the
 current connection and open a new one with another reader"""
 
-        readers=list(smartcard.System.readers()) # avoid side effects
+        readers=safe_list_readers()
         readers.append(self.READER_NULL)
 
-        # pick a default reader
-        i=len(readers)-1
+        if str(self.curreader) == self.READER_NULL or \
+                not reader_plugged(self.curreader, False): # str => BUG pyscard
+            i=len(readers)-1
+        else: # current reader is currently plugged.
+            i=readers[:-1].index(self.curreader) # compensate BUG in pyscard
 
-        # DEBUG :  encountered problems while comparing readers and strings
-        if isinstance(self.curreader, str):
-            str_readers=[str(x) for x in readers]
-            if self.curreader in str_readers:
-                i=str_readers.index(self.curreader)
-        else:
-            if self.curreader in readers:
-                i=readers.index(self.curreader)
-
-
-        print "default", i #DEBUG
         curreader=selector(readers, i)[1]
+        
         self.reset(curreader)
-
-
-    def error_location(self, ustr, index):
-        """returns the string appended with a newline and one indication of the
-        given index
-
-        the current implementation places an '^' right undex the caractec at the
-        given index
-        """
-        # TODO : insert "@"+str(index) at the beginning of the "^" line if
-        # there is enought space
-        return ustr+"\n"+''.join([ ' ' for num in xrange(index)]) + "^"
-
-    def normal_hex_input(self, ustr):
-        """Parse a normal hexdecimal line of input
-
-    Normal lines are formed of blocs whose length is even, and shortcut blocs
-whose length is 1. Those shortcut blocs are equivalent to "0X", where X is
-the shortcut bloc. The accepted character set is the set of all hexadcimal
-characters.
-
-    We return "" if the string doesn't contain any command, 
-    or a string indicating a parsing error if there is one, 
-    or the command, a list of bytes if given string is well-formed"""
-        base=16 # hexa input
-        
-        command=[]
-        for bloc in ustr.split():
-
-            if len(bloc) % 2 == 1 and len(bloc) != 1: # don't accept blocs of 3, 5, ... 
-                    # since user might forget a symbol if he doesn't split his
-                    # command, but accept shortcuts for the high-order 0
-                s="length of "+bloc+" is not even or equal to 1\n\n"
-                m=re.search(escape_backslashes(bloc), ustr)
-                s+=self.error_location(ustr, m.start())
-                return s
-
-            byte=0
-            for i in xrange(len(bloc)):
-                try:
-                    value=int(bloc[i],base)
-                except ValueError:
-                    s="character "+bloc[i]+" is not an hexadecimal\n\n"
-                    m=re.search(escape_backslashes(bloc), ustr)
-                    s+=self.error_location(ustr, m.start()+i)
-                    return s
-
-                if len(bloc)== 1: # allows shortcuts for the high-order 0
-                    byte=value
-                    command.append(byte) # byte complete
-                elif i % 2 ==0: # the first 4 bits of a byte of 2 symbols
-                    byte=value*base
-                else:
-                    byte+=value
-                    command.append(byte) # byte complete
-
-        if len(command) == 0: # empty command
-            return ""
-
-        return command
-
-    def push_zero_if_len1(self, x): 
-        """ adds "0" in front of string if it's length is 1"""
-        return len(x)==1 and "0"+x or x
-
-    def autoconvert_data(self, data):
-        """automatically convert list of bytes data to ascii char on some
-conditions, return None if the default printing method should be applied
-
-The current condition is whether it contains enough printable characters, but it
-might be user-configured in the future"""
-        pzero=self.push_zero_if_len1
-
-        min_ascii=1.0 
-            # minimal proportion of printable ascii characters in the data to
-            # automatically enable translation
-        
-        len_few_errors=5
-            # length needed to ensure a low probability of converting to ascii
-            # non-ascii data
-            # len_few_errors == 5 => probably less than 1% of errors
-        ascii_chars=[chr(x) for x in data if 32 <= x <= 126 ]
-            # only printable ascii characters
-
-        if len(data) == 0: 
-            return None
-
-        if float(len(ascii_chars)) / len(data) >= min_ascii:
-            out=[]
-            for c in data:
-                if 32 <= c <= 126:
-                    out.append(chr(c))
-                else: # display  unprintable as \xHH (not perfect but ok)
-                    out.append('\\x'+pzero(hex(c)[2:]))
-
-            asciistr=''.join(out)
-            if len(asciistr) <= len_few_errors: 
-                # still probable that data is not ascii data => print both
-                asciistr+=" "+str([pzero(hex(x)[2:]) for x in ans])
-
-            return asciistr
-
-
-        else: # not enough evidence to print it in ascii
-            return None
-
-    def normal_hex_output(self, ans, sw1, sw2):
-        """Format answer and the two status words nicely"""
-        pzero=self.push_zero_if_len1
-
-        data=self.autoconvert_data(ans)
-        if data is None:
-            data="["+(' '.join([pzero(hex(x)[2:]) for x in ans]))+"]"
-        else:
-            data="[ "+data+" ]"
-
-        return data+" "+pzero(hex(sw1)[2:])+" "+pzero(hex(sw2)[2:])
 
 
     def fun_usrinput(self, ustr):
@@ -329,52 +417,59 @@ might be user-configured in the future"""
         we return the string displayed by the cli, or None when we receive a
         commands that should trigger an exit of current shell.
         """
-        ustr=self.remove_comments(ustr)
+        try:
+            ustr=remove_comments(ustr)
 
-        if self.check_exit(ustr):
-            if self.s is not None:
-                self.s.close() # close connection
-                self.s=None
-            return None
+            if self.check_exit(ustr):
+                if self.s is not None:
+                    reader_plugged(self.curreader)
+                    self.s.close() # close connection
+                    self.s=None
+                return None
 
-        if len(ustr) >= 1 and ustr[-1] == '\\': # continuation on multiple lines
-            self.command_acc+=ustr[:-1]
-            return ""
-        else:
-            ustr=self.command_acc+ustr
-            self.command_acc=""
-
-        if len(ustr.split()) == 0: # empty command
-            return ""
-
-        # reset, changereader commands
-        word_list=ustr.split()
-        if "reset" == word_list[0]:
-            self.reset()
-            return "...Done"
-        if "changereader" == word_list[0]:
-            self.change_reader()
-            return "...Current reader: "+str(self.curreader)
-
-        # normal commands (sent to smartcard reader)
-        command = self.normal_hex_input(ustr)
-        if isinstance(command, str): # error or no command
-            return command
-
-        if self.s is not None:
-            ans, sw1, sw2 = self.s.sendCommandAPDU(command)
-
-            try: # error diagnosis. Excepts if there is an error
-                self.errorchain[0](ans, sw1, sw2)
-            except SWException, e:
-                error_diagnosis=str(e)
+            if len(ustr) >= 1 and ustr[-1] == '\\': # continuation on multiple lines
+                self.command_acc+=ustr[:-1]
+                return ""
             else:
-                error_diagnosis=""
+                ustr=self.command_acc+ustr
+                self.command_acc=""
 
-            return self.normal_hex_output(ans, sw1, sw2) + " " + error_diagnosis
+            if len(ustr.split()) == 0: # empty command
+                return ""
 
-        else: # no connection
-            return "No connection : command was not sent"
+            # reset, changereader commands
+            word_list=ustr.split()
+            if "reset" == word_list[0]:
+                self.reset()
+                return "...Done"
+            if "changereader" == word_list[0]:
+                self.change_reader()
+                return "...Current reader: "+str(self.curreader)
+
+            # normal commands (sent to smartcard reader)
+            command = normal_hex_input(ustr)
+            if isinstance(command, str): # error or no command
+                return command
+
+            if self.s is not None:
+                if len(command) < 4: # 4 mandatory bytes in APDUs
+                    return "Invalid APDU: [CLA, INS, P1, P2] bytes are mandatory"
+                reader_plugged(self.curreader)
+                ans, sw1, sw2 = self.s.sendCommandAPDU(command)
+                try: # error diagnosis. Excepts if there is an error
+                    self.errorchain[0](ans, sw1, sw2)
+                except SWException, e:
+                    error_diagnosis=str(e)
+                else:
+                    error_diagnosis=""
+                return normal_hex_output(ans, sw1, sw2) + " " + error_diagnosis
+
+            else: # no connection
+                return "No connection : command was not sent"
+        except ReaderAbsentException, e:
+            # self.s.close() would except here
+            self.s=None
+            return str(e)
 
 
     def check_exit(self, ustr):
@@ -389,35 +484,6 @@ might be user-configured in the future"""
             return True
 
         return False
-
-
-    def remove_comments(self, ustr):
-        """deletes any commented part of the string. Accepts None to tolerate
-        EOF"""
-        if ustr is None: # EOF
-            return None
-
-        comment_pattern='#'
-        m=re.search(comment_pattern, ustr)
-        if m:
-            return ustr[:m.start()]
-        else:
-            return ustr
-
-    def init_history(self, histfile):
-        readline.parse_and_bind("tab: complete")
-        if hasattr(readline, "read_history_file"):
-            try:
-                readline.read_history_file(histfile)
-            except IOError:
-                print "unable to read history file: "+histfile
-            atexit.register(self.save_history, histfile)
-
-    def save_history(self, histfile):
-        try:
-            readline.write_history_file(histfile)
-        except IOError:
-            pass
 
 
 def usage():
@@ -464,8 +530,12 @@ def main():
     try:
         command_loop( c.fun_usrinput)
     except BaseException:
-        if c is not None and c.s is not None:
-            c.s.close()
+        try:
+            if c is not None and c.s is not None:
+                c.s.close()
+        except AttributeError:
+            pass
+        
         raise
     
     return 0

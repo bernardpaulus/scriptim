@@ -28,7 +28,7 @@ http://github.com/bernardpaulus/scriptim
 
 Scriptim supports: 
  - readline command-line edition capabilities:
-   in-place command edition, bash-like history
+   in-place command edition, bash-like history (~/.scriptim_history file)
  - automatic detection and display of ascii data, with an error probability of
    less than 1%.
  - shortcuts for hexadecimal commands
