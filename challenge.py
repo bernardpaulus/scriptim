@@ -1,8 +1,18 @@
 #!/usr/bin/python
 
-import struct
-from pyDes import *
+import sys
 from binascii import hexlify, unhexlify 
+try:
+    from pyDes import *
+except ImportError:
+    print """Module pyDes not available
+    to install it:
+        download it from http://sourceforge.net/projects/pydes/
+        unzip it
+        run : sudo python pyDes-2.0.1/setup.py install
+    You're done!
+"""
+    sys.exit(1)
 
 def data_input():
     return ''.join([x for x in raw_input() if x in "0123456789ABCDEFabcdef"])
@@ -30,9 +40,7 @@ D1=decipher_master_key(nr)
 print "D1 = ", hexlify(D1)
 
 # c
-longlongint1=struct.unpack('>Q',struct.pack('8s', D1))[0]
-longlongint2=struct.unpack('>Q',struct.pack('8s', nt2))[0]
-buff=struct.unpack('8s',struct.pack('>Q', longlongint1 ^ longlongint2))[0]
+buff=int(hexlify(D1), 16) ^ int(hexlify(nt2)
 
 # d
 D2=decipher_master_key(buff)

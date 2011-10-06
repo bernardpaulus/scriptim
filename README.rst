@@ -51,6 +51,8 @@ Install
 to run scriptim, you'll need:
 python (works at least under 2.6 and 2.7), pcsc_lite, pyscard and ccid
 
+and scriptim_utils.py
+
 Mac OS/X snow leopard
 ----------------------
 
