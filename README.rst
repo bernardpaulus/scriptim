@@ -43,7 +43,7 @@ Scriptim does not support yet:
  * manual protocol selection
 
 Scriptim additionnally targets to:
- * support inter-session history
+ * support automated authentication
 
 Install
 ========

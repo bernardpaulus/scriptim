@@ -28,6 +28,7 @@ import getopt, sys
 import atexit # history stuff
 import os
 
+
 try: # improves current shell with command-line editing capabilities
     # TODO : support history between sessions
     import readline 
@@ -48,6 +49,8 @@ except ImportError:
     print "No smartcard module found"
     print "on debian, try: sudo aptitude install python-pyscard"
     sys.exit(3)
+
+from scriptim_utils import *
 
 #=== UTILS ===
 
@@ -117,16 +120,6 @@ def selector(choices_list, default_index=None):
         return (choice, choices_list[choice])
     else:
         return default_return
-
-#+++ scriptim exceptions +++
-
-class ScriptimException(Exception):
-    """Base class for every scriptim exception."""
-    pass
-
-class ReaderAbsentException(ScriptimException):
-    """raised when a reader that should be there isn't"""
-    pass
 
 #+++ pyscard wrapper functions +++
 
