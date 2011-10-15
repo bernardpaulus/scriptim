@@ -45,6 +45,9 @@ try:
     from smartcard.sw.ISO7816_8ErrorChecker import ISO7816_8ErrorChecker
     from smartcard.sw.ISO7816_9ErrorChecker import ISO7816_9ErrorChecker
     from smartcard.sw.SWExceptions import SWException, WarningProcessingException
+
+    # exceptions
+    from smartcard.pcsc.PCSCExceptions import EstablishContextException
 except ImportError:
     print "No smartcard module found"
     print "on debian, try: sudo aptitude install python-pyscard"
