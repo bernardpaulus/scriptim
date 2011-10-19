@@ -40,7 +40,10 @@ D1=decipher_master_key(nr)
 print "D1 = ", hexlify(D1)
 
 # c
-buff=int(hexlify(D1), 16) ^ int(hexlify(nt2)
+c = hex(int(hexlify(D1), 16) ^ int(hexlify(nt2), 16))[2:][:-1]
+print c, len(c)
+buff=unhexlify(c)
+print len(buff)
 
 # d
 D2=decipher_master_key(buff)
