@@ -33,26 +33,6 @@ from scriptim_utils import *
 # A filter has two possibilities : execute an action (exit, send APDU, ...) or
 # transform the input, passing it to the next module
 
-class ChainZone:
-    def __init__(self, name, terminal_filter):
-        """initialises a zone, its name and
-it's terminal filter (should be a filter object, not None)
-"""
-        self.name=name
-        self.terminal_filter=terminal_filter
-        self.chain=[]
-
-
-    def end(self):
-        """returns true if there is filters to run using next_f(), false if
-terminal filter was executed previously 
-"""
-        pass
-
-    def next_f(self, data):
-        """executes the next filter on the list if there is one.
-This is done by calling execute() on the next filter
-"""
 
 
 class FilterChain:
@@ -91,6 +71,13 @@ terminal filter of that zone.
             self.head = filter_obj
         filter_obj.insert(terminal_filter.prev, terminal_filter)
 
+    def execute(self, data):
+        """Execute the filter chain : feed the first filter with the data, which
+will in turn feed the second, etc.
+"""
+        if self.head is not None:
+            self.head.execute(data)
+
 
 class List_Node:
     """A simple class for double linked list nodes"""
@@ -116,6 +103,7 @@ class List_Node:
         if self.next is not None:
             self.next.prev=self.prev
 
+
 class BaseFilter(List_Node):
     """Base class for every filter."""
     def execute(self, data):
@@ -132,7 +120,7 @@ return something. This something will be propagated back through the chain, and
 possibly modified.
 
 If this filter encounter an error while processing the data, it will raise a
-Processing_Exception.
+ProcessingException.
 
 There is two kinds of processing errors: 
 - the ones where the error can be pinpointed, for example when a user makes an
@@ -141,12 +129,16 @@ There is two kinds of processing errors:
   the reader is disconnected
 
 When a module can pinpoint the origin of an error it must use an instance of
-Pinpointed_Error. 
+PinpointedError, a specialization of ProcessingException. 
 
 The problem with this type of errors is that some filters might modify the
 structure of the data. For the ones that do, it's their responsibility to trace
 back the origin of the error in the data they initially received.
 
+When a module can't pinpoint the origin of an error it must use an instance of
+the more general ProcessingException.
+
+Output and errors. Normal output should be 
 """
         return self.exec_next(data)
 
@@ -157,3 +149,8 @@ the current filter is the last
         if self.next is not None:
             return self.next.execute(data)
         raise NoMoreFiltersException("this filter "+str(self)+"was the last one")
+
+
+class IOmodule:
+    """This class deals with inputs/output operations. It is used to
+adapt the filter chain to either an """

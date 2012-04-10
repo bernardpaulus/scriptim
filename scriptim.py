@@ -336,9 +336,10 @@ loop: fun_usrinput
         self.s=None
         self.reset()
         self.command_acc="" # empty unterminated command
+        self.errorchain = []
 
         # error detection
-        errorchain = []
+        errorchain = self.errorchain
         errorchain = [ErrorCheckingChain(errorchain, ISO7816_9ErrorChecker())]
         errorchain = [ErrorCheckingChain(errorchain, ISO7816_8ErrorChecker())]
         errorchain = [ErrorCheckingChain(errorchain, ISO7816_4ErrorChecker())]
@@ -453,7 +454,8 @@ current connection and open a new one with another reader"""
                 reader_plugged(self.curreader)
                 ans, sw1, sw2 = self.s.sendCommandAPDU(command)
                 try: # error diagnosis. Excepts if there is an error
-                    self.errorchain[0](ans, sw1, sw2)
+                    if not (self.errorchain == [] or self.errorchain is None):
+                        self.errorchain[0](ans, sw1, sw2)
                 except SWException, e:
                     error_diagnosis=str(e)
                 else:

@@ -1,9 +1,6 @@
 
-""" crcISO.py Clone of crcISO.c created by Tania Martin 
-Computes a CRC-16 of the given data
-"""
+""" crcISO.py Clone of crcISO.c. Code snippet by adam laurie """
 from binascii import hexlify, unhexlify 
-from challenge import *
 
 
 def crc16_iso14443a(data):
@@ -31,6 +28,7 @@ def crc16_iso14443ab(data, crc, polynomial, invert):
     return [crclow, crchigh]
 
 if __name__ == "__main__":
+    from challenge import data_input
     # You put in BuffCRC_A the 16-byte data that you want to compute
     print "Insert the data to process for the CRC-16 (or <enter> for default)"
     data=unhexlify(data_input() or "11223344556677889900aabbccddeeff")
