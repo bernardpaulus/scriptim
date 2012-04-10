@@ -163,4 +163,3 @@ This is due to a bug of pcsc_lite that has been fixed in the svn, but not yet
 packaged.
 
 http://archives.neohapsis.com/archives/dev/muscle/current/0040.html
-(EDIT: the page doesn't seem accessible the 2 of october 2011)
